@@ -5,6 +5,7 @@ import streamlit.components.v1 as components
 import os
 import requests
 import io
+import re  # Para limpar a matrícula
 
 # Configuração da página
 st.set_page_config(page_title="RH Digital - DMAE", layout="wide")
@@ -90,46 +91,48 @@ if api_key:
         uploaded_fip = st.file_uploader("Suba o arquivo PDF da FIP", type="pdf")
 
         if uploaded_fip:
-            with st.spinner('Baixando Normas do GitHub e analisando FIP...'):
+            with st.spinner('Lendo Normas e Processando FIP...'):
                 
-                # 1. Busca a Biblioteca de Códigos direto do seu repositório GitHub
+                # 1. Busca a Biblioteca de Códigos do GitHub
                 url_biblioteca = "https://raw.githubusercontent.com/Fuzna/FIP/main/Ocorr%C3%AAncia%20FIP%20-%20C%C3%B3digos.pdf"
                 biblioteca_codigos = ""
-                
                 try:
-                    response_github = requests.get(url_biblioteca)
-                    if response_github.status_code == 200:
-                        pdf_file = io.BytesIO(response_github.content)
+                    res = requests.get(url_biblioteca)
+                    if res.status_code == 200:
+                        pdf_file = io.BytesIO(res.content)
                         reader_ref = PdfReader(pdf_file)
                         for page in reader_ref.pages:
                             biblioteca_codigos += page.extract_text()
-                    else:
-                        st.sidebar.warning("Aviso: Não foi possível acessar a biblioteca no GitHub. Usando conhecimento geral.")
-                except Exception as e:
-                    st.sidebar.error(f"Erro ao conectar ao GitHub: {e}")
+                except:
+                    pass
                 
-                # 2. Lê a FIP enviada pelo usuário
+                # 2. Lê a FIP enviada
                 reader_fip = PdfReader(uploaded_fip)
                 text_fip = ""
                 for page in reader_fip.pages:
                     text_fip += page.extract_text()
 
-                # 3. Prompt Inteligente cruzando os dados
+                # 3. Prompt para Extrair a Matrícula (Para o nome do arquivo)
+                prompt_matricula = f"Extraia apenas os números da matrícula do servidor deste texto: {text_fip[:1000]}. Responda apenas os números, sem texto adicional."
+                res_matricula = model.generate_content(prompt_matricula)
+                matricula_limpa = re.sub(r'\D', '', res_matricula.text) # Garante que só fiquem números
+                
+                if not matricula_limpa:
+                    matricula_limpa = "000000"
+
+                # 4. Prompt de Análise Completa
                 prompt = f"""
                 Você é o Especialista de RH do DMAE Porto Alegre.
-                Sua base oficial de códigos de ocorrência extraída do PDF normativo é:
-                {biblioteca_codigos if biblioteca_codigos else "Use os códigos padrão do DMAE: 1 (Falta), 15 (Justificativa), 37 (Treinamento), 77 (Serviço Externo), 999 (Erro de batida)."}
-                
-                Analise esta FIP (Folha Individual de Ponto):
-                {text_fip}
+                Use como base: {biblioteca_codigos if biblioteca_codigos else "IDG 614 e 513"}.
+                Analise esta FIP: {text_fip}
                 
                 MISSÃO:
-                1. Extraia Nome, Matrícula e Lotação do servidor.
-                2. Identifique ocorrências críticas (Faltas, Erros de batida/999, Atrasos).
-                3. Sugira a regularização técnica exata usando os códigos da biblioteca acima.
-                4. Cite as IDGs 614 e 513 na argumentação para fundamentar o parecer.
+                1. Extraia Nome, Matrícula e Lotação.
+                2. Identifique ocorrências (Faltas, Erros 999, Atrasos).
+                3. Sugira regularização com códigos técnicos.
+                4. Fundamente com as IDGs 614 e 513.
                 
-                REGRAS: Linguagem formal, sem usar asteriscos (**), seja direto ao ponto e técnico.
+                REGRAS: Linguagem formal, sem asteriscos (**).
                 """
 
                 response = model.generate_content(prompt)
@@ -138,13 +141,16 @@ if api_key:
                 st.subheader("Resultado da Auditoria Digital")
                 components.html(html_final, height=850, scrolling=True)
 
+                # 5. Botão de Download com Nome Personalizado
+                nome_arquivo = f"{matricula_limpa}_Dashboard_Auditoria_DMAE.html"
+                
                 st.download_button(
-                    label="📥 Baixar Parecer Técnico (HTML)",
+                    label=f"📥 Baixar Parecer ({nome_arquivo})",
                     data=html_final,
-                    file_name="Auditoria_RH_DMAE.html",
+                    file_name=nome_arquivo,
                     mime="text/html"
                 )
     except Exception as e:
-        st.error(f"Erro detectado no processamento: {e}")
+        st.error(f"Erro: {e}")
 else:
     st.info("Insira sua Gemini API Key na barra lateral para começar.")
