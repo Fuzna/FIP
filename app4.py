@@ -86,7 +86,8 @@ def gerar_html_original(analise_ia):
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
         uploaded_fip = st.file_uploader("Suba o arquivo PDF da FIP", type="pdf")
 
