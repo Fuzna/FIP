@@ -12,7 +12,7 @@ st.set_page_config(page_title="RH Digital - DMAE", layout="wide")
 st.title("📊 Auditoria de Frequência Inteligente - DMAE")
 
 # Barra lateral para a chave
-api_key = st.sidebar.text_input("Insira sua Gemini API Key:", type="password")
+api_key = st.sidebar.text_input("Insira sua Gemini API Key:", type="password").strip()
 
 def gerar_html_original(analise_ia):
     # Limpeza de markdown para o HTML
